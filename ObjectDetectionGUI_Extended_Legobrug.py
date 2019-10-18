@@ -1,5 +1,6 @@
 # Import Pckackeges
 import tkinter as tk
+
 from PIL import Image, ImageTk
 
 import numpy as np
@@ -26,7 +27,7 @@ def start_visual_detection():
     if Choose_Var.get() == 2:
         from opcua import Client
         
-        # Define url of the server
+        # Define url of the server 
         url =  "opc.tcp://10.30.122.39:4840"
         
         # Define client to server url
@@ -41,6 +42,8 @@ def start_visual_detection():
         Func_HeartBeat_From_Brug = client.get_node("ns=3;s=Data to Detectie_Heartbeat")
         Func_HeartBeat_To_Brug = client.get_node("ns=3;s=Data from Detectie_Heartbeat")
         Func_StopCommand = client.get_node("ns=3;s=Data from Detectie_Stop commando")
+        Func_StopCommand = client.get_node("ns=2;i=2")
+        
     
     
     
@@ -146,10 +149,13 @@ def start_visual_detection():
                 amount_person = 0
                 amount_objects = num_detections[0].astype(np.int32)
                 min_score_thresh = 0.5
+                max_score_per_frame_person = 0
                 for i in range(len(np.squeeze(classes)) - 1):
                     if np.squeeze(classes)[i] == 1 and np.squeeze(scores)[i] >= min_score_thresh:
                         amount_person = amount_person + 1
                         amount_objects = amount_objects - 1
+                        if np.squeeze(scores)[i] >= max_score_per_frame_person:
+                            max_score_per_frame_person = np.squeeze(scores)[i]
 
                 # Set the stringvariables and update window
                 Detections_person_lbl.set(str(amount_person))
@@ -172,7 +178,7 @@ def start_visual_detection():
                     Func_HeartBeat_To_Brug.set_value(Var_HeartBeat)
                     
                         # When 1 or more person are detected
-                    if amount_person >= 1:
+                    if max_score_per_frame_person >= 0.8:
                         Func_StopCommand.set_value(True)
 
 
