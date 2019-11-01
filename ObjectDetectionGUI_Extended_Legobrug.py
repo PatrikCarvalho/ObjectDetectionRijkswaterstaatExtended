@@ -1,6 +1,5 @@
 # Import Pckackeges
 import tkinter as tk
-
 from PIL import Image, ImageTk
 
 import numpy as np
@@ -23,7 +22,8 @@ import tarfile
 
 #### Define start function
 def start_visual_detection():
-    # Connect to the Lego Brug
+    #########################################################################################
+    # Connect to the Lego Brug only when "Met Legobrug" is enabled
     if Choose_Var.get() == 2:
         from opcua import Client
         
@@ -38,12 +38,16 @@ def start_visual_detection():
         print("Client connected to server")
         
         # Get the address of the different varibles using NodeID
-        Func_ResponseTime = client.get_node("ns=3;s=Data to Detectie_Respons time")
+        #Func_ResponseTime = client.get_node("ns=3;s=Data to Detectie_Respons time")
         Func_HeartBeat_From_Brug = client.get_node("ns=3;s=Data to Detectie_Heartbeat")
         Func_HeartBeat_To_Brug = client.get_node("ns=3;s=Data from Detectie_Heartbeat")
         Func_StopCommand = client.get_node("ns=3;s=Data from Detectie_Stop commando")
-        Func_StopCommand = client.get_node("ns=2;i=2")
+        Func_StappenProg = client.get_node("ns=3;s=Data to Detectie_Stappen programma")
         
+        # After connection, chekc if Stopcommand is False else set to False
+        if Func_StopCommand.get_value() == True:
+            Func_StopCommand.set_value(False)
+        ##################################################################################
     
     
     
@@ -63,7 +67,9 @@ def start_visual_detection():
     PATH_TO_CKPT = MODEL_NAME + '/frozen_inference_graph.pb'
     
     # List of the strings that is used to add correct label for each box.
-    PATH_TO_LABELS = os.path.join('data', 'mscoco_label_map.pbtxt')
+    PATH_TO_LABELS = os.path.join(os.getcwd(), os.path.join('data', 'mscoco_label_map.pbtxt'))
+    #PATH_TO_LABELS = os.path.join('data', 'mscoco_label_map.pbtxt')
+    print(PATH_TO_LABELS)
     
     NUM_CLASSES = 90
 
@@ -109,6 +115,7 @@ def start_visual_detection():
         with tf.Session(graph=detection_graph) as sess:
             ret = True
             Stop_detection_var.set(False)
+            Continue_detection_var.set(False)
             while(ret):
                 ret,image_np = cap.read()
                 # Expand dimensions since the model expects images to have shape: [1, None, None, 3]
@@ -143,6 +150,10 @@ def start_visual_detection():
                 if cv2.waitKey(25) & 0xFF == ord('q') or Stop_detection_var.get() == '1':
                     cv2.destroyAllWindows()
                     cap.release()
+                    ################################################################################
+                    if Choose_Var.get() == 2:
+                        Func_StopCommand.set_value(False)
+                    ################################################################################
                     break
 
                 # Calculating the amount of person and objects in detection
@@ -163,24 +174,34 @@ def start_visual_detection():
                 Detections_object_lbl.set(str(amount_objects))
                 window.update()
 
-
+#####################################################################################################
                  # When connect to Lego brug
                 if Choose_Var.get() == 2:
                     # Read Response time from server    
-                    Var_ResponseTime = Func_ResponseTime.get_value() 
-                    print(Var_ResponseTime)
+                    #Var_ResponseTime = Func_ResponseTime.get_value() 
+                    #print(Var_ResponseTime)
                     
                     # Read Heartbeat
                     Var_HeartBeat = Func_HeartBeat_From_Brug.get_value()
-                    print(Var_HeartBeat)
+                    #print(Var_HeartBeat)
                     
                     # Write HeartBeat
                     Func_HeartBeat_To_Brug.set_value(Var_HeartBeat)
                     
-                        # When 1 or more person are detected
-                    if max_score_per_frame_person >= 0.8:
+                    
+                    
+                    
+                        # When 1 or more person are detected. Stopcommand is always false when noone is detected
+                    max_score_per_frame_person_treshold = 0.5
+                    StappenProgramma = 4
+                    if max_score_per_frame_person >= max_score_per_frame_person_treshold and Func_StappenProg.get_value() == StappenProgramma:
                         Func_StopCommand.set_value(True)
-
+                    elif Func_StappenProg.get_value() == StappenProgramma and Continue_detection_var.get() == '1':
+                        Func_StopCommand.set_value(False)
+                        Continue_detection_var.set(False)
+                        
+                        
+################################################################################
 
 # Condition 2 for stopping  object detection
 #### Define stop function
@@ -188,7 +209,10 @@ def stop_visual_detection():
     Stop_detection_var.set(True)
 
 
-
+# function when we press continue button
+def continue_brug():
+    Continue_detection_var.set(True)
+    
 
 
 
@@ -218,53 +242,63 @@ window.configure(background="white")
 
 
 ### Introduce RWS Logo
-image = Image.open("RWSLogo2.png")
+image = Image.open('RWSLogo2.png')
 photo1 = ImageTk.PhotoImage(image)
 tk.Label(window, image=photo1, bg="white").grid(row=0, column=2, sticky=tk.E)
 
 
 #### Add a START buton without LegoBrug
-tk.Button(window, text="START", width=15, command=start_visual_detection).grid(row=1, column=0, sticky=tk.W)
+tk.Button(window, text="START", font="none 12 bold", width=15, bg="green", command=start_visual_detection).grid(row=1, column=0, sticky=tk.W)
 #### Create a Label for START button
 tk.Label(window, text="Start detectie:", bg="white", fg="black", font="none 12 bold").grid(row=0, column=0, sticky=tk.SW)
 
+
+
 ### Create Radio Button group for with and without Legobrug
 Choose_Var = tk.IntVar()
-tk.Radiobutton(window, text="Zonder Legobrug", bg="white", fg="black", font="none 9 bold", variable=Choose_Var, value=1).grid(row=2, column=0, sticky=tk.SW)
+tk.Radiobutton(window, text="Zonder Legobrug", bg="white", fg="black", font="none 12 bold", variable=Choose_Var, value=1).grid(row=2, column=0, sticky=tk.SW)
 
-tk.Radiobutton(window, text="Met Legobrug", bg="white", fg="black", font="none 9 bold", variable=Choose_Var, value=2).grid(row=3, column=0, sticky=tk.SW)
+tk.Radiobutton(window, text="Met Legobrug", bg="white", fg="black", font="none 12 bold", variable=Choose_Var, value=2).grid(row=3, column=0, sticky=tk.SW)
 
 
 
 #### Add a STOP button
 Stop_detection_var = tk.StringVar()
-tk.Button(window, text="STOP", width=14, command=stop_visual_detection).grid(row=1, column=1, sticky=tk.W)
+tk.Button(window, text="STOP", bg="red", font="none 12 bold", width=14, command=stop_visual_detection).grid(row=1, column=1, sticky=tk.W)
 #### Create a Label for START button
 tk.Label(window, text="Stop detectie:", bg="white", fg="black", font="none 12 bold").grid(row=0, column=1, sticky=tk.SW)
+
+
+
+#### Add a Continue button
+Continue_detection_var = tk.StringVar()
+tk.Button(window, text="GA DOOR", bg="orange", font="none 12 bold", width=14, command=continue_brug).grid(row=1, column=2, sticky=tk.W)
+#### Create a Label for Continue button
+tk.Label(window, text="Brug veilig:", bg="white", fg="black", font="none 12 bold").grid(row=0, column=2, sticky=tk.SW)
 
 
 
 
 #### Create a dynamic Label for showing number of detections
 Detections_lbl = tk.StringVar()
-tk.Label(window, textvariable=Detections_lbl, bg="white", fg="black", font="none 12 bold").grid(row=1, column=4, sticky=tk.W)
+tk.Label(window, textvariable=Detections_lbl, bg="white", fg="black", font="none 15 bold").grid(row=1, column=4, sticky=tk.W)
 #### Create a Label for the number of detections
-tk.Label(window, text="Aantal Detecties:", bg="white", fg="black", font="none 12 bold").grid(row=1, column=3, sticky=tk.W)
+tk.Label(window, text="Aantal Detecties:", bg="white", fg="black", font="none 15 bold").grid(row=1, column=3, sticky=tk.W)
 
 
 #### Create a dynamic Label for showing number of persons detected
 Detections_person_lbl = tk.StringVar()
-tk.Label(window, textvariable=Detections_person_lbl, bg="white", fg="black", font="none 12 bold").grid(row=2, column=4, sticky=tk.W)
+tk.Label(window, textvariable=Detections_person_lbl, bg="white", fg="red", font="none 15 bold").grid(row=2, column=4, sticky=tk.W)
 #### Create a Label for the number of detections
-tk.Label(window, text="Personen:", bg="white", fg="black", font="none 12 bold").grid(row=2, column=3, sticky=tk.W)
+tk.Label(window, text="Personen:", bg="white", fg="black", font="none 15 bold").grid(row=2, column=3, sticky=tk.W)
 
 
 
 #### Create a dynamic Label for showing number of persons detected
 Detections_object_lbl = tk.StringVar()
-tk.Label(window, textvariable=Detections_object_lbl, bg="white", fg="black", font="none 12 bold").grid(row=3, column=4, sticky=tk.W)
+tk.Label(window, textvariable=Detections_object_lbl, bg="white", fg="black", font="none 15 bold").grid(row=3, column=4, sticky=tk.W)
 #### Create a Label for the number of detections
-tk.Label(window, text="Objecten:", bg="white", fg="black", font="none 12 bold").grid(row=3, column=3, sticky=tk.W)
+tk.Label(window, text="Objecten:", bg="white", fg="black", font="none 15 bold").grid(row=3, column=3, sticky=tk.W)
 
 
 
